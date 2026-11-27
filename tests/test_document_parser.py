@@ -135,6 +135,25 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(text, "(cid:42) 항목")
         self.assertTrue(notes)
 
+    def test_hangul_document_bullets_keep_indentation_and_conditions(self):
+        raw = "◦ 첫 항목\n  ❍ 둘째 항목\n\t○ 셋째 항목\n- 하위 조건 ≤ 5%\n① 순서\nㅇ 선택 항목\n본문의 ◦ 기호\n○붙어있는표시"
+        text, notes = parser.clean_text(raw)
+        self.assertEqual(text, "● 첫 항목\n  ● 둘째 항목\n\t● 셋째 항목\n- 하위 조건 ≤ 5%\n① 순서\nㅇ 선택 항목\n본문의 ◦ 기호\n○붙어있는표시")
+        self.assertFalse(notes)
+
+    def test_document_bullet_override_only_changes_line_prefix(self):
+        raw = "ㅇ 글머리\n\t\uf0a7 확인한 기호\n본문의 ㅇ 및 \uf0a7 유지\nㅇ붙어있는글자"
+        text, notes = parser.clean_text(raw, bullet_chars="ㅇ\uf0a7")
+        self.assertEqual(text, "● 글머리\n\t● 확인한 기호\n본문의 ㅇ 및 \uf0a7 유지\nㅇ붙어있는글자")
+        self.assertIn("U+F0A7", notes[0])
+        # 문서별 설정이 다음 호출에 남지 않아야 합니다.
+        self.assertEqual(parser.clean_text(raw)[0], raw)
+
+    def test_invalid_bullet_overrides_are_rejected(self):
+        for chars in ["ㅇ ", "\n", "\x00", "\ufffd", "\ud800", None]:
+            with self.subTest(chars=chars), self.assertRaises(ValueError):
+                parser.clean_text("본문", bullet_chars=chars)
+
     def test_verified_document_map_distinguishes_bullet_and_middle_dot(self):
         raw = "\uf09f 자료 송\uf09e수신 및 진단\uf09e평가"
         text, notes = parser.clean_text(raw, symbol_map={"\uf09f": "•", "\uf09e": "·"})
@@ -161,6 +180,17 @@ class ParserTests(unittest.TestCase):
             item = parser.parse_rfp("sample.hwp")[0]
         self.assertEqual(item["req_text"], "● 항목")
         self.assertEqual(item["raw_req_text"], "● 항목")
+
+    def test_hwp_and_hwpx_share_cleanup_without_altering_raw_text(self):
+        raw = "◦ 항목\nㅇ 확인한 글머리\n- 송\uf09e수신 ≥ 95%\n\uf06c 미확인 기호"
+        block = parser.TableBlock("표 1", requirement(text=raw, footer=True))
+        for suffix in ["hwp", "hwpx"]:
+            with self.subTest(suffix=suffix), patch.object(parser, "read_hwp", return_value=[block]):
+                item = parser.parse_rfp(f"sample.{suffix}", symbol_map={"\uf09e": "·"}, bullet_chars="ㅇ")[0]
+            self.assertEqual(item["doc_type"], suffix.upper())
+            self.assertEqual(item["raw_req_text"], raw)
+            self.assertEqual(item["req_text"], "● 항목\n● 확인한 글머리\n- 송·수신 ≥ 95%\n\uf06c 미확인 기호")
+            self.assertIn("U+F06C", item["warnings"][0])
 
     def test_cli_symbol_map_only_processes_selected_file(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -189,6 +219,12 @@ class ParserTests(unittest.TestCase):
 
     def test_cli_rejects_map_without_selected_file(self):
         with patch.object(sys, "argv", ["parser", "--symbol-map", "symbols.json"]), redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as error:
+                parser.main()
+        self.assertEqual(error.exception.code, 2)
+
+    def test_cli_rejects_bullet_override_without_selected_file(self):
+        with patch.object(sys, "argv", ["parser", "--bullet-chars", "ㅇ"]), redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as error:
                 parser.main()
         self.assertEqual(error.exception.code, 2)

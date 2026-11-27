@@ -1,0 +1,4 @@
+case_id,req_a_id,req_a_text,req_b_id,req_b_text,split
+DEMO-001,DEMO-R1,시스템은 로그인 시 비밀번호와 일회용 인증번호를 확인해야 한다.,DEMO-R2,사용자 로그인에는 비밀번호 및 일회용 인증번호를 이용한 이중 인증을 적용한다.,test
+DEMO-002,DEMO-R3,접속 이력은 1년간 보관해야 한다.,DEMO-R4,접속 이력은 3년간 보관해야 한다.,test
+DEMO-003,DEMO-R5,시스템은 로그인 시 비밀번호와 일회용 인증번호를 확인해야 한다.,DEMO-R6,월간 유지보수 보고서를 매월 마지막 영업일에 제출해야 한다.,test

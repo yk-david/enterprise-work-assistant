@@ -6,7 +6,7 @@ NVIDIA AI CAMPUS 팀 프로젝트 — LLM 기반 제안요청서 요구사항 �
 
 제안요청서(RFP)에 포함된 중복되거나 유사한 요구사항을 식별하고, 관련 내용을 묶어 목록화하여 핵심 요구사항을 한눈에 파악할 수 있도록 지원합니다. 문서에 흩어진 내용을 반복해서 확인하는 부담을 줄이고, 공통점과 차이를 쉽게 확인하도록 돕습니다.
 
-> 주제와 역할 분담을 확정했습니다. 현재 Python 파일은 담당 기능을 설명하는 주석만 포함하며 실제 기능은 아직 구현하지 않았습니다.
+> PDF·HWP·HWPX 추출 → 문서 전체 관계 분류 → 그룹화·원문 기반 요약 → 화면·CSV/JSON 다운로드를 연결했습니다. QLoRA 학습 및 Adapter 로딩도 지원합니다. 실행 방법은 [화면 가이드](guide_app.md), [파서 가이드](guide_parser.md), [추론 가이드](guide_inference.md)를 참고하세요. 화면에서 학습이 완료된 최신 라벨 모델·기존 라벨 모델·기본 모델을 선택하고 같은 평가 데이터의 비교 결과를 확인할 수 있습니다.
 
 ## 프로젝트 정보
 
@@ -15,7 +15,7 @@ NVIDIA AI CAMPUS 팀 프로젝트 — LLM 기반 제안요청서 요구사항 �
 | 교육 과정 | NVIDIA AI CAMPUS |
 | 팀 구성 | 3명 |
 | 일정 | 목요일 기획 회의, 금요일~일요일 개발 및 발표 준비, 월요일 발표 |
-| 현재 단계 | 주제·역할 분담 확정 및 개발 준비 |
+| 현재 단계 | 문서 전체 분석·화면 연결, 최신 라벨 학습 및 기존 모델과 동일 조건 비교 |
 
 ## 프로젝트 정의
 
@@ -56,7 +56,9 @@ src/
   app.py               # 팀원2: 업로드·결과 화면 및 CSV 다운로드
   train.py             # 팀원3: 데이터 분할·변환 및 QLoRA 학습
   inference.py         # 팀원3: 요구사항 구조화 및 관계 분류 추론
-  grouping.py          # 팀원3: 그룹 생성 및 요약·차이점 정리
+  analysis.py          # 팀원3: 문서 전체 비교·그룹화·요약 통합 API/CLI
+  grouping.py          # 팀원3: 모든 구성원 관계를 확인하는 그룹 생성
+  summarization.py     # 팀원3: 원문 선택 요약과 조건·출처 보존
 ```
 
 ## 주요 기술 스택
@@ -66,7 +68,7 @@ src/
 | 구분 | 구성안 |
 | --- | --- |
 | 개발 언어 | Python |
-| 기본 모델 | Qwen/Qwen3-1.7B 우선 검토 |
+| 기본 모델 | Qwen/Qwen3-1.7B 기본 추론 및 QLoRA 학습 구현 |
 | 학습 방식 | 4비트 QLoRA 기반 지도 미세조정(SFT) |
 | 학습 대상 | 요구사항 쌍의 중복·유사·무관 관계 분류 및 근거 제시 |
 | AI 프레임워크 | PyTorch, Hugging Face Transformers·PEFT, bitsandbytes |
@@ -74,7 +76,7 @@ src/
 | HWP 처리 | 샘플 추출 시험 후 방식 확정 |
 | 데이터·화면 | pandas, Streamlit |
 | NVIDIA 기술 | CUDA 기반 GPU 학습·추론 |
-| 로컬 장비 | NVIDIA GeForce RTX 5060 Laptop GPU, VRAM 약 8GB |
+| 로컬 장비 | 기본 추론 검증: RTX 4070 Ti 12GB / 별도 학습 장비 후보: RTX 5060 Laptop GPU 8GB |
 
 그룹별 요약은 우선 프롬프트 기반으로 구현합니다. NIM·NeMo·Blueprint는 초기 범위에 포함하지 않습니다.
 
@@ -123,7 +125,7 @@ src/
 - 기능 목록·설계 문서와 요구사항의 반영 여부 비교
 - 설계 및 코드 자동 생성
 - 여러 RFP 사이의 통합 분석
-- 스캔 문서·OCR, 암호화 문서, HWPX 지원
+- 스캔 문서·OCR, 암호화 문서
 - 외부 업무 시스템 연동
 
 ## 협업 및 실행 안내
@@ -131,15 +133,118 @@ src/
 - Discord에서 회의 결과와 진행 상황을 공유하고 GitHub에서 코드를 관리합니다.
 - 처음 요구사항 10쌍은 함께 분류해 기준을 맞춥니다. 코드의 형식 검사와 사람의 정답 검토를 구분합니다.
 - 금요일 종료 1시간 전에 코드·샘플 결과·실행 방법·알려진 오류를 공유하고 통합 환경에서 실행합니다.
-- 설치·실행 명령은 실제 구현과 검증 후 추가합니다. 현재 파일만으로 서비스나 학습을 실행할 수는 없습니다.
+- 설치·추론 명령은 [추론 가이드](guide_inference.md)를 참고하세요. PDF/HWP/HWPX 표 추출, 기본 모델 추론, QLoRA 학습 및 Adapter 추론을 실행할 수 있습니다. [화면 가이드](guide_app.md)에서는 업로드부터 실제 그룹 결과 다운로드까지 안내합니다.
+
+### 문서 전체 분석과 화면 실행
+
+```powershell
+uv sync --locked --extra training --python 3.13
+.\.venv\Scripts\python.exe -m streamlit run src/app.py
+```
+
+로컬 모델 캐시를 준비한 뒤 문서를 업로드하고 `요구사항 추출` → `문서 전체 분석`을 실행합니다. PDF/HWP/HWPX를 지원하며 화면에서 모델을 자동 다운로드하지 않습니다. `artifacts/rfp3-qlora-relabelled-20261127/adapter`의 학습 완료·가중치·메타데이터가 확인되면 최신 라벨 모델을 기본 선택합니다. 기존 모델은 `artifacts/rfp3-qlora-20261127/adapter`에서 불러오며 별도로 선택할 수 있습니다. 해당 파일과 모델 캐시는 Git에 포함되지 않습니다.
+
+화면 없이 실행할 수도 있습니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m src.analysis --input "src/data/output/제안요청서.pdf.requirements.json" --out src/data/output/document_analysis.json --adapter artifacts/rfp3-qlora-relabelled-20261127/adapter --batch-size 4
+```
+
+`--input`에는 요구사항 JSON 외에 원본 PDF/HWP/HWPX 경로도 지정할 수 있습니다. 기본값은 로컬 캐시 사용이며 최초 모델 다운로드가 필요할 때만 `--allow-download`를 지정합니다. 결과 JSON에는 원문·모든 쌍 판정·오류·그룹·요약 근거·실행 정보가, 같은 이름의 CSV에는 화면용 여섯 필드가 저장됩니다. 기존 결과를 바꾸려면 `--overwrite`를 명시합니다.
+
+- 모든 서로 다른 요구사항 쌍을 비교합니다. 문서 배치는 greedy decoding을 사용하므로 기존 단일 쌍 평가 CLI의 sampling 설정과 구분됩니다.
+- 기본 빠른 분석은 같은 모델·원문·프롬프트로 생성한 첫 `label` 필드가 완성되면 멈춥니다. 그룹화에 사용하지 않는 쌍별 장문 설명을 매번 생성하지 않습니다. 원문 기반 그룹 요약과 조건 보존은 계속 수행합니다. 쌍별 근거·차이점까지 필요하면 화면에서 `쌍별 상세 설명 생성`을 켜거나 CLI에 `--detailed-pairs`를 추가하세요.
+- 빠른 판정 결과의 빈 `pred_reason`·`pred_diff_conditions`는 `explanation_status=not_requested`, `response_format=label_prefix`로 구분합니다. 첫 라벨 형식을 확인할 수 없으면 같은 배치의 상세 생성으로 대체하며 오류를 임의 라벨로 바꾸지 않습니다. 빠른 모드는 생성하지 않은 설명 JSON 전체의 유효성을 검증한 것으로 표시하지 않습니다.
+- 그룹의 모든 구성원 사이에 성공한 중복/유사 판정이 있어야 합칩니다. 비교 실패를 무관으로 바꾸지 않으며 모든 항목을 그룹 또는 단독 항목으로 유지합니다.
+- 요약 모델은 원문 단위 ID를 선택합니다. 요약 문장은 원문에서 복원하고 선택되지 않은 내용도 `diff_conditions`의 보존 항목에 남깁니다. 이 항목은 원문별 조건을 대조하는 용도이며 의미상 차이를 자동 확정하지 않습니다. 요약 실패·길이 초과는 원문 추출 방식으로 대체하고 표시합니다.
+- CSV가 수식으로 해석되는 것을 막기 위해 `=`, `+`, `-`, `@`로 시작하는 표시 필드에는 작은따옴표를 붙입니다. JSON의 본문은 그대로 유지합니다. 학습·추론 입력에 `#NAME?` 등 오류 문자열이 저장되어 있으면 실행 전에 거절합니다.
+- 20개 요구사항은 190쌍이므로 문서 길이와 GPU에 따라 시간이 걸립니다. 3분 목표는 검증 전이며, 분류·요약 결과의 내용은 원문과 함께 검토해야 합니다.
+- 상세 설명이나 그룹 요약이 응답 토큰 상한에 도달하면, 화면의 `처리 설정`에서 응답 최대 토큰을 384에서 768 또는 1024로 높여 다시 실행할 수 있습니다. 빠른 관계 판정에는 최대 32토큰을 사용하며 원문을 자르지 않습니다. 아래 과거 모델 비교는 상세 설명 생성·384토큰 조건의 기록입니다.
+
+### 로컬 학습 및 Adapter 추론
+
+프로젝트 루트에서 Python 3.13 환경과 CUDA용 패키지를 준비합니다.
+
+```powershell
+uv sync --locked --extra training --python 3.13
+.\.venv\Scripts\python.exe -m src.train --pairs src/data/output/datasets/rfp3_relabelled_20261127/pairs_gt.csv --provenance src/data/output/datasets/rfp3_relabelled_20261127/provenance.json --out artifacts/my-training-run --epochs 2
+.\.venv\Scripts\python.exe main.py --pairs src/data/output/datasets/rfp3_relabelled_20261127/pairs_gt.csv --split test --adapter artifacts/my-training-run/adapter --out src/data/output/adapter_pred.csv --local-files-only
+```
+
+기본 모델 Qwen3-1.7B의 고정 리비전은 먼저 로컬 캐시에 다운로드되어 있어야 합니다. 학습은 4-bit NF4 QLoRA, rank 8, BF16, batch 1/gradient accumulation 4를 사용합니다. 프롬프트 토큰은 loss에서 제외하고 정답 JSON만 학습합니다. 입력은 조용히 자르지 않으며, 기존 실행 폴더는 덮어쓰지 않습니다. `--prepare-only`는 가중치 학습 없이 토큰 길이를 검사하고 train/val/test JSONL을 저장합니다.
+
+`adapter/`에는 검증 손실이 가장 낮은 회차의 Adapter와 기본 모델·리비전·프롬프트 정보가 저장됩니다. test는 학습이나 회차 선택에 사용하지 않습니다. 추론은 같은 기본 모델의 BF16 가중치에 Adapter를 불러오며, 설정이 맞지 않으면 중단합니다.
+
+2026-11-27 데이터는 기존 71쌍에서 출발해 기존 RFP 조항 16쌍, 추가 RFP 3건의 조항 28쌍을 보강한 115쌍입니다(train 88 / val 9 / test 18). 기존 CASE-033은 보고 조건 차이 때문에 중복에서 유사·관련으로 정정했습니다. 중복 9 / 유사·관련 47 / 무관 59이며, 원문 블록과 별도 ID를 부여한 조항 단위 사례가 섞여 있습니다. 동일 부모 요구사항과 동일 텍스트는 분할 간 겹치지 않습니다. 문서 전체를 분리한 평가는 아닙니다.
+
+새 라벨은 assistant가 원문을 대조해 작성한 검토안이며, 팀의 합의가 끝난 인간 정답으로 간주하면 안 됩니다. val/test에는 중복이 각각 1쌍뿐이므로 평가 결과는 초기 실행 확인용입니다. 한 문서에서 반복된 문장을 서로 다른 위치로 추적한 사례도 있어, 행 수가 독립적인 의미 사례 수와 같지는 않습니다.
+
+복구한 최신 라벨의 학습 입력은 `src/data/output/datasets/rfp3_relabelled_20261127/`에 바이트 그대로 복사해 고정했습니다. SHA256은 `731d1f9ca0b87e2da27be417ab224abfd94831b15d8f36b5246c11b1a0ca4d5b`이며, 115쌍 중 중복 8 / 유사·관련 46 / 무관 61입니다. train 88 / val 9 / test 18 분할을 유지했고, test의 ID·본문·라벨은 이전 데이터와 동일합니다. 학습·검증 라벨 9개와 전체 근거·차이점이 갱신됐으므로 기존 모델의 validation loss와 새 loss를 직접 비교하지 않습니다.
+
+화면과 같은 greedy/batch 4 설정으로 기본·기존·최신 모델을 다시 비교하는 명령입니다. 기존 sampled 추론 기록과 구분하며, test는 학습이나 회차 선택에 사용하지 않습니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.compare_model_versions --pairs src/data/output/datasets/rfp3_relabelled_20261127/pairs_gt.csv --previous artifacts/rfp3-qlora-20261127/adapter --current artifacts/rfp3-qlora-relabelled-20261127/adapter --out artifacts/model-comparison-rerun --include-base --batch-size 4
+```
+
+비교 도구는 입력·Adapter 해시를 기록하고 모델을 하나씩 로딩합니다. 예측 누락·형식 오류도 오답으로 계산하며, 모델별 원문 포함 예측 CSV/JSON과 `comparison.json`을 저장합니다. 기존 출력 폴더는 덮어쓰지 않습니다. 화면은 최신 실행의 `evaluation/comparison.json`이 현재 모델·데이터와 일치할 때만 점수를 표시합니다.
+
+데이터의 `requirements.csv`, `provenance.json`, `sources.json`, `annotations.json`, `validation.json`으로 ID·원문 위치·문서 해시·분할 및 판정 이력을 확인할 수 있습니다. 이스포츠 HWP는 원본 표의 셀 겹침으로 표 변환이 실패하여 HWP 본문 레코드에서 문단을 읽었습니다. 선택한 문단은 문단 번호·섹션·레코드 번호를 보존하며, 페이지 번호나 표 전체 복원 성공을 주장하지 않습니다.
+
+재생성은 `scripts/augment_existing_rfps.py --pairs <원래 71행 CSV> --out src/data/output/datasets/existing_rfp_augmented` 후 `scripts/build_rfp3_dataset.py` 순서입니다. 두 스크립트는 검토한 원문과 라벨 명세에 한정된 데이터 구축 도구이며, 임의 RFP의 자동 정답 생성기가 아닙니다. 모델·학습데이터·결과물은 Git 제외 경로에 저장됩니다.
+
+동일 test 예측 비교는 `scripts/compare_training_predictions.py --gold <정답CSV> --base <기본모델예측CSV> --adapted <Adapter예측CSV> --out <비교JSON>`으로 실행합니다. 누락·오류 예측도 평가 분모에 포함하고, 완료 여부를 별도로 기록합니다.
+
+2026-11-27 초기 실행은 RTX 4070 Ti에서 2회차/44 optimizer steps, 약 178초에 완료했습니다. 검증 손실은 2.7169 → 1.1086, 선택 회차는 2회차입니다. 저장한 Adapter를 다시 불러와 동일 test 18쌍을 비교했을 때 정확도 14/18 → 16/18, Macro F1 0.7407 → 0.8651, JSON 형식 오류 3건 → 0건이었습니다. 기본 모델의 형식 오류도 오답으로 포함했습니다. 비교 도구는 이 기본 모델 오류를 표시하기 위해 exit code 1을 반환하며 결과 JSON은 보존합니다. 이 작은 검토용 데이터의 결과를 일반 성능이나 팀 합의된 평가 결과로 해석하면 안 됩니다. 실행 기록은 `artifacts/rfp3-qlora-20261127/`에 있습니다.
+
+### 최신 라벨 재학습 기록
+
+2026-11-27 복구한 라벨로 QLoRA를 기본 모델에서 새로 학습했습니다. 기존과 동일한 설정으로 2회차/44 optimizer steps를 실행했고, 검증 손실은 새 데이터 기준 3.0027 → 1.3301, 선택 회차는 2회차입니다. 약 196초, GPU 최대 할당 5.659 GiB였으며 test는 가중치 학습이나 선택에 사용하지 않았습니다. 결과는 `artifacts/rfp3-qlora-relabelled-20261127/`에 저장됩니다. 기존 Adapter와 데이터는 별도 경로에 보존합니다.
+
+동일 test 18쌍을 화면과 같은 greedy/batch 4로 다시 실행한 결과입니다. 추론 시간은 모델 로딩을 제외한 한 번의 측정입니다.
+
+| 모델 | 정확도 | Macro F1 | 출력 형식 오류 | 추론 시간 |
+| --- | --- | --- | --- | --- |
+| 기본 모델 | 12/18 (66.7%) | 0.7111 | 5건 | 39.5초 |
+| 기존 라벨 Adapter | 17/18 (94.4%) | 0.9218 | 0건 | 58.1초 |
+| 최신 라벨 Adapter | 17/18 (94.4%) | 0.9218 | 0건 | 126.1초 |
+
+이번 평가에서 최신 모델의 분류 점수 향상은 확인되지 않았습니다. 기존·최신 모델의 18개 판정은 모두 같고 CASE-068을 함께 오분류했습니다. 평균 응답 길이는 기존 76.4토큰에서 최신 188.9토큰으로 늘었습니다. 최신 모델은 수정된 라벨·근거를 학습한 버전으로 화면 기본값에 연결하며, 더 빠른 기존 모델도 선택할 수 있습니다. 근거·차이점의 내용 품질은 이 분류 지표로 평가하지 않았습니다.
+
+모델별 예측과 전체 지표는 `artifacts/rfp3-qlora-relabelled-20261127/evaluation/`에 있습니다. 비교 명령의 종료 코드 1은 기본 모델의 JSON 오류 5건을 나타내며, 기존·최신 Adapter의 18쌍은 모두 유효하게 처리했습니다. 오류도 전체 평가 분모에 포함했습니다.
+
+### 빠른 문서 분석 검증
+
+최신 모델이 느려진 주요 원인은 쌍마다 길어진 근거·조건 차이를 생성하는 비용입니다. 이전 비교에서 입력 토큰과 모델 설정은 같았지만 평균 출력은 76.4 → 188.9토큰, 배치별 생성 단계 합계는 523 → 1,149로 늘었습니다. 그룹화에는 분류값만 사용하고 그룹 요약은 원문에서 별도로 생성하므로, 문서 분석 기본값은 같은 프롬프트의 첫 라벨 확정 후 생성을 멈추도록 변경했습니다. 가중치·분류 기준·원문은 변경하지 않았습니다.
+
+검증 9쌍에서 판정 일치를 확인한 뒤 코드·데이터·가중치 해시를 고정하고 test 18쌍을 측정했습니다. 같은 모델을 한 번 로딩하고 train 사례로 준비 실행한 뒤 CUDA 동기화로 시간을 측정했습니다. 아래 시간은 모델 로딩·준비 실행·그룹 요약을 제외한 쌍별 추론이며, 과거의 단일 실행 126.1초와 직접 나눈 수치가 아닙니다.
+
+| 최신 Adapter의 처리 방식 | 정확도 | Macro F1 | 오류 | 18쌍 추론 시간 |
+| --- | --- | --- | --- | --- |
+| 상세 설명 생성, 1회 측정 | 17/18 (94.4%) | 0.9218 | 0건 | 51.429초 |
+| 빠른 판정, 3회 중앙값 | 17/18 (94.4%) | 0.9218 | 0건 | 3.376초 |
+
+이 측정에서는 약 15.23배 빨랐고 모든 반복의 18개 판정이 같았습니다. 총 출력은 3,401 → 135토큰이며 상세 방식으로 대체한 사례는 없었습니다. 실제 PDF에서 추출한 3개 요구사항을 GPU·화면으로 비교한 시험에서도 그룹의 여섯 출력 필드가 모두 같았고, 요약 포함 분석 시간은 19.802 → 2.015초였습니다. 소규모 표본과 고정 실행 순서의 측정이며 전체 문서·다른 장비의 속도나 정확도를 보장하지 않습니다.
+
+화면에서 `쌍별 상세 설명 생성`을 켜면 기존 방식으로 돌아갑니다. 빠른 방식에서는 쌍별 설명이 생성되지 않았다는 상태를 명시하며, 생성하지 않은 전체 설명 JSON의 형식까지 검증했다고 주장하지 않습니다. 그룹 요약·원문별 조건·출처·CSV 다운로드는 두 방식 모두 유지합니다.
+
+재현용 명령과 결과는 다음과 같습니다. 먼저 `val`, 이후 같은 코드에서 `test`를 실행하고 출력 디렉터리는 새 경로를 지정합니다.
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.benchmark_inference_modes --pairs src/data/output/datasets/rfp3_relabelled_20261127/pairs_gt.csv --adapter artifacts/rfp3-qlora-relabelled-20261127/adapter --split val --out artifacts/speed-check-val --batch-size 4 --max-new-tokens 768 --full-repeats 1 --fast-repeats 3
+```
+
+실행 기록은 `artifacts/rfp3-qlora-relabelled-20261127/speed_optimization/val/` 및 `test/`의 `performance.json`과 반복별 CSV/JSON에 있습니다. 화면에서도 현재 모델의 해시와 일치하는 test 보고서를 표시합니다.
 
 ## 다음 단계
 
 - [x] 프로젝트 주제 및 초기 기능 범위 결정
 - [x] 역할 분담 및 담당 파일 정의
-- [ ] PDF·HWP 샘플 확보 및 추출 시험
+- [x] PDF·HWP 샘플 확보 및 추출 시험
 - [ ] 데이터 형식·함수 인터페이스 합의
-- [ ] 모델 실행 및 짧은 학습 시험
+- [x] 기본 모델 로딩 및 요구사항 쌍 추론 실행
+- [x] 짧은 QLoRA 학습 시험 (115쌍 중 train 88쌍, 2회차)
 - [ ] 데이터 검증·평가 코드 구현
-- [ ] 문서 처리·모델·화면 연결
-- [ ] 파인튜닝 전후 평가 및 시연 준비
+- [x] 문서 처리·모델·화면 연결
+- [x] 최신 라벨 재학습 및 기존 모델과 동일 조건 비교 (test 18쌍)
+- [ ] 별도 RFP 평가 및 시연 속도 검증

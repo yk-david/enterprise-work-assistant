@@ -224,3 +224,7 @@ __marimo__/
 
 # Output in JSON
 /src/data/output/
+
+# Downloaded model weights and local model artifacts
+/.cache/
+/artifacts/

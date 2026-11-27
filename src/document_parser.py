@@ -1,4 +1,4 @@
-"""PDF/HWP 요구사항 표 추출. 원문을 보존하고 정리본과 검토 경고를 제공합니다."""
+"""PDF/HWP/HWPX 요구사항 표 추출. 원문을 보존하고 정리본과 검토 경고를 제공합니다."""
 
 import argparse
 import json
@@ -15,6 +15,10 @@ ID_LABELS = {"요구사항번호", "요구사항고유번호"}
 DETAIL_LABELS = {"요구사항상세내용", "상세내용", "요구사항세부내용", "세부내용"}
 FOOTER_LABELS = {"산출정보", "관련요구사항", "요구사항출처"}
 CLASS_LABEL = "요구사항분류"
+
+# PDF/HWP/HWPX에서 공통으로 쓰이는 명시적인 글머리 기호입니다.
+# 'ㅇ', 'o', '-'는 글자/하위 항목/수식일 수 있어 기본 치환 대상에서 제외합니다.
+STANDARD_BULLET_CHARS = "•●▪‣⁃◦○❍"
 
 # 원문과 대조해 글머리표임을 확인한 문자만 추가하세요.
 # 예: {"\uf06c"}. 사설 영역 문자 전체나 대체 문자(�)를 일괄 삭제하지 않습니다.
@@ -49,7 +53,18 @@ def validate_symbol_map(symbol_map: Any) -> dict[str, str]:
     return symbol_map
 
 
-def clean_text(raw: str, *, symbol_map: dict[str, str] | None = None) -> tuple[str, list[str]]:
+def validate_bullet_chars(bullet_chars: str) -> str:
+    if not isinstance(bullet_chars, str) or any(
+        c.isspace() or c == "\ufffd" or unicodedata.category(c) in {"Cc", "Cs", "Cf"}
+        for c in bullet_chars
+    ):
+        raise ValueError("글머리 문자에는 공백, 제어문자, 대체 문자(�)를 지정할 수 없습니다.")
+    return bullet_chars
+
+
+def clean_text(
+    raw: str, *, symbol_map: dict[str, str] | None = None, bullet_chars: str = ""
+) -> tuple[str, list[str]]:
     """확실한 서식만 정리합니다. 의미 불명의 문자는 남기고 경고합니다."""
     # 사설 문자 의미는 문서/폰트에 따라 다르므로 확인한 치환표를 지정했을 때만 적용합니다.
     mapped = raw.translate(str.maketrans(validate_symbol_map(symbol_map))) if symbol_map is not None else raw
@@ -63,7 +78,7 @@ def clean_text(raw: str, *, symbol_map: dict[str, str] | None = None) -> tuple[s
         text = "".join(" " if c in controls else c for c in text)
 
     # 줄 시작 + 뒤 공백이 있는 글머리표만 ●로 통일합니다. %, ≥, ≤, ① 등은 유지합니다.
-    bullets = "•●▪‣⁃" + "".join(sorted(EXTRA_BULLET_CHARS))
+    bullets = STANDARD_BULLET_CHARS + "".join(sorted(EXTRA_BULLET_CHARS)) + validate_bullet_chars(bullet_chars)
     text = re.sub(r"^([ \t]*)[" + re.escape(bullets) + r"](?=[ \t]|$)", r"\1●", text, flags=re.M)
     unknown = {c for c in text if c == "\ufffd" or unicodedata.category(c) in {"Co", "Cs", "Cf"}}
     if unknown:
@@ -79,7 +94,11 @@ def source_ids(rows: list[list[str | None]]) -> set[str]:
     for row in rows:
         for col, cell in enumerate(row[:-1]):
             if compact(cell) in ID_LABELS:
-                value = next((compact(v) for v in row[col + 1:] if v and v.strip()), "")
+                value = next((compact(v) for v in row[col + 1:]
+                              if v and v.strip() and compact(v) not in ID_LABELS), "")
+                # 요구사항 목록표의 열 제목은 실제 요구사항 번호가 아닙니다.
+                if value.startswith("요구사항명"):
+                    continue
                 if not re.fullmatch(r"[A-Z]+-[0-9]+", value):
                     raise ValueError(f"요구사항 원본 번호 형식을 확인하세요: {value!r}")
                 found.add(value)
@@ -197,15 +216,18 @@ def read_hwp(path: Path) -> list[TableBlock]:
     return blocks
 
 
-def parse_rfp(file_path: str | Path, *, symbol_map: dict[str, str] | None = None) -> list[dict[str, Any]]:
+def parse_rfp(
+    file_path: str | Path, *, symbol_map: dict[str, str] | None = None, bullet_chars: str = ""
+) -> list[dict[str, Any]]:
+    validate_bullet_chars(bullet_chars)
     path = Path(file_path)
     doc_type = path.suffix[1:].upper()
     if doc_type == "PDF":
         blocks = read_pdf(path)
-    elif doc_type == "HWP":
+    elif doc_type in {"HWP", "HWPX"}:
         blocks = read_hwp(path)
     else:
-        raise ValueError("지원 형식은 .hwp와 .pdf입니다.")
+        raise ValueError("지원 형식은 .hwp, .hwpx와 .pdf입니다.")
 
     result = []
     seen = set()
@@ -218,6 +240,9 @@ def parse_rfp(file_path: str | Path, *, symbol_map: dict[str, str] | None = None
             if not label_cols:
                 continue
             col = label_cols[-1]
+            # 병합 셀 표의 '정의' 행을 세부 요구사항 본문으로 오인하지 않습니다.
+            if col + 1 < len(row) and compact(row[col + 1]) == "정의":
+                continue
             for value_col in range(col + 1, len(row)):
                 value = row[value_col]
                 if value and value.strip():
@@ -244,7 +269,7 @@ def parse_rfp(file_path: str | Path, *, symbol_map: dict[str, str] | None = None
             raise ValueError(f"{block.location}: 요구사항 {source_id}가 반복됩니다.")
         seen.add(source_id)
         raw = "\n".join(details)
-        cleaned, notes = clean_text(raw, symbol_map=symbol_map)
+        cleaned, notes = clean_text(raw, symbol_map=symbol_map, bullet_chars=bullet_chars)
         result.append({
             "req_id": f"REQ-{len(result) + 1:03d}",
             "source_req_id": source_id,
@@ -264,8 +289,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--overwrite", action="store_true", help="기존 JSON도 다시 생성")
     parser.add_argument("--symbol-map", type=Path, help="원문과 대조한 문서용 기호 치환표 JSON")
-    parser.add_argument("--file", type=Path, help="input 폴더 전체 대신 지정한 PDF/HWP 한 파일만 처리")
+    parser.add_argument("--bullet-chars", default="", help="이 문서에서 확인한 추가 글머리 문자(예: ㅇ). 줄 시작에서만 ●로 치환")
+    parser.add_argument("--file", type=Path, help="input 폴더 전체 대신 지정한 PDF/HWP/HWPX 한 파일만 처리")
     args = parser.parse_args()
+    if args.bullet_chars and args.file is None:
+        parser.error("문서별 글머리 문자는 --file로 지정한 한 파일에만 적용하세요.")
+    try:
+        validate_bullet_chars(args.bullet_chars)
+    except ValueError as error:
+        parser.error(str(error))
     symbol_map = None
     if args.symbol_map is not None:
         if args.file is None:
@@ -277,18 +309,18 @@ def main() -> int:
     data_dir = Path(__file__).resolve().parent / "data"
     input_dir, output_dir = data_dir / "input", data_dir / "output"
     if args.file is not None:
-        if not args.file.is_file() or args.file.suffix.lower() not in {".hwp", ".pdf"}:
-            parser.error("--file에는 존재하는 PDF/HWP 파일을 지정하세요.")
+        if not args.file.is_file() or args.file.suffix.lower() not in {".hwp", ".hwpx", ".pdf"}:
+            parser.error("--file에는 존재하는 PDF/HWP/HWPX 파일을 지정하세요.")
         sources = [args.file]
     elif not input_dir.is_dir():
-        parser.exit(1, f"입력 폴더를 만들고 PDF/HWP를 넣어주세요: {input_dir}\n")
+        parser.exit(1, f"입력 폴더를 만들고 PDF/HWP/HWPX를 넣어주세요: {input_dir}\n")
     else:
         sources = sorted(input_dir.iterdir())
     output_dir.mkdir(parents=True, exist_ok=True)
     created = skipped = failed = 0
     for source in sources:
         suffix = source.suffix.lower()
-        if not source.is_file() or suffix not in {".hwp", ".pdf"}:
+        if not source.is_file() or suffix not in {".hwp", ".hwpx", ".pdf"}:
             continue
         name = source.stem if suffix == ".hwp" else source.name
         output_path = output_dir / f"{name}.requirements.json"
@@ -297,7 +329,7 @@ def main() -> int:
             skipped += 1
             continue
         try:
-            result = parse_rfp(source, symbol_map=symbol_map)
+            result = parse_rfp(source, symbol_map=symbol_map, bullet_chars=args.bullet_chars)
             with TemporaryDirectory(dir=output_dir) as temp_dir:
                 temp_path = Path(temp_dir) / output_path.name
                 with temp_path.open("w", encoding="utf-8") as output_file:
